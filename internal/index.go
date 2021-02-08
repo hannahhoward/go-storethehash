@@ -233,83 +233,85 @@ func (i *Index) Put(key []byte, location Block) error {
 	if records == nil {
 		// As it's the first key a single byte is enough as it doesn't need to be distinguised
 		// from other keys.
-		trimmedIndexKey := indexKey[:1]
-		newData = EncodeKeyPosition(KeyPositionPair{trimmedIndexKey, location})
+		//trimmedIndexKey := indexKey[:1]
+		newData = EncodeKeyPosition(KeyPositionPair{indexKey, location})
 	} else {
 		// Read the record list from disk and insert the new key
 		pos, prevRecord, has := records.FindKeyPosition(indexKey)
+		if has && bytes.Compare(prevRecord.Key, indexKey) == 0 {
+			return nil
 
-		if has && bytes.HasPrefix(indexKey, prevRecord.Key) {
-
-			// The previous key is fully contained in the current key. We need to read the full
-			// key from the main data file in order to retrieve a key that is distinguishable
-			// from the one that should get inserted.
-			fullPrevKey, err := i.Primary.GetIndexKey(prevRecord.Block)
-			if err != nil {
-				return err
-			}
-			// The index key has already removed the prefix that is used to determine the
-			// bucket. Do the same for the full previous key.
-			prevKey := StripBucketPrefix(fullPrevKey, i.sizeBits)
-			keyTrimPos := FirstNonCommonByte(indexKey, prevKey)
-			// Only store the new key if it doesn't exist yet.
-			if keyTrimPos >= len(indexKey) {
-				return nil
-			}
-
-			trimmedPrevKey := prevKey[:keyTrimPos+1]
-			trimmedIndexKey := indexKey[:keyTrimPos+1]
-			var keys []KeyPositionPair
-
-			// Replace the existing previous key (which is too short) with a new one and
-			// also insert the new key.
-			if bytes.Compare(trimmedPrevKey, trimmedIndexKey) == -1 {
-				keys = []KeyPositionPair{
-					{trimmedPrevKey, prevRecord.Block},
-					{trimmedIndexKey, location},
+			/*
+				// The previous key is fully contained in the current key. We need to read the full
+				// key from the main data file in order to retrieve a key that is distinguishable
+				// from the one that should get inserted.
+				fullPrevKey, err := i.Primary.GetIndexKey(prevRecord.Block)
+				if err != nil {
+					return err
 				}
-			} else {
-				keys = []KeyPositionPair{
-					{trimmedIndexKey, location},
-					{trimmedPrevKey, prevRecord.Block},
+				// The index key has already removed the prefix that is used to determine the
+				// bucket. Do the same for the full previous key.
+				prevKey := StripBucketPrefix(fullPrevKey, i.sizeBits)
+				keyTrimPos := FirstNonCommonByte(indexKey, prevKey)
+				// Only store the new key if it doesn't exist yet.
+				if keyTrimPos >= len(indexKey) {
+					return nil
 				}
-			}
-			newData = records.PutKeys(keys, prevRecord.Pos, pos)
-			// There is no need to do anything with the next key as the next key is
-			// already guaranteed to be distinguishable from the new key as it was already
-			// distinguishable from the previous key.
+
+				trimmedPrevKey := prevKey[:keyTrimPos+1]
+				trimmedIndexKey := indexKey[:keyTrimPos+1]
+				var keys []KeyPosition
+
+				// Replace the existing previous key (which is too short) with a new one and
+				// also insert the new key.
+				if bytes.Compare(trimmedPrevKey, trimmedIndexKey) == -1 {
+					keys = []KeyPosition{
+						{trimmedPrevKey, prevRecord.Block},
+						{trimmedIndexKey, location},
+					}
+				} else {
+					keys = []KeyPosition{
+						{trimmedIndexKey, location},
+						{trimmedPrevKey, prevRecord.Block},
+					}
+				}
+				newData = records.PutKeys(keys, prevRecord.Pos, pos)
+				// There is no need to do anything with the next key as the next key is
+				// already guaranteed to be distinguishable from the new key as it was already
+				// distinguishable from the previous key.*/
 		} else {
 
 			// The previous key is not fully contained in the key that should get inserted.
 			// Hence we only need to trim the new key to the smallest one possible that is
 			// still distinguishable from the previous (in case there is one) and next key
 			// (in case there is one).
+			/*
+				prevRecordNonCommonBytePos := 0
+				if has {
+					prevRecordNonCommonBytePos = FirstNonCommonByte(indexKey, prevRecord.Key)
+				}
+				// The new record won't be the last record
+				nextRecordNonCommonBytePos := 0
+				if pos < records.Len() {
+					// In order to determine the minimal key size, we need to get the next key
+					// as well.
+					nextRecord := records.ReadRecord(pos)
+					nextRecordNonCommonBytePos = FirstNonCommonByte(indexKey, nextRecord.Key)
+				}
 
-			prevRecordNonCommonBytePos := 0
-			if has {
-				prevRecordNonCommonBytePos = FirstNonCommonByte(indexKey, prevRecord.Key)
-			}
-			// The new record won't be the last record
-			nextRecordNonCommonBytePos := 0
-			if pos < records.Len() {
-				// In order to determine the minimal key size, we need to get the next key
-				// as well.
-				nextRecord := records.ReadRecord(pos)
-				nextRecordNonCommonBytePos = FirstNonCommonByte(indexKey, nextRecord.Key)
-			}
+				// Minimum prefix of the key that is different in at least one byte from the
+				// previous as well as the next key.
+				minPrefix := max(
+					prevRecordNonCommonBytePos,
+					nextRecordNonCommonBytePos,
+				)
 
-			// Minimum prefix of the key that is different in at least one byte from the
-			// previous as well as the next key.
-			minPrefix := max(
-				prevRecordNonCommonBytePos,
-				nextRecordNonCommonBytePos,
-			)
+				// We cannot trim beyond the key length
+				keyTrimPos := min(minPrefix, len(indexKey)-1)
 
-			// We cannot trim beyond the key length
-			keyTrimPos := min(minPrefix, len(indexKey)-1)
-
-			trimmedIndexKey := indexKey[:keyTrimPos+1]
-			newData = records.PutKeys([]KeyPositionPair{{trimmedIndexKey, location}}, pos, pos)
+				trimmedIndexKey := indexKey[:keyTrimPos+1]
+			*/
+			newData = records.PutKeys([]KeyPositionPair{{indexKey, location}}, pos, pos)
 		}
 	}
 	i.outstandingWork += Work(len(newData) + BucketPrefixSize + SizePrefixSize)

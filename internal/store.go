@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"math"
 	"sync"
 	"time"
@@ -129,16 +128,16 @@ func (s *Store) Get(key []byte) ([]byte, bool, error) {
 	if !found {
 		return nil, false, nil
 	}
-	primaryKey, value, err := s.index.Primary.Get(fileOffset)
+	_, value, err := s.index.Primary.Get(fileOffset)
 	if err != nil {
 		return nil, false, err
 	}
-
-	// The index stores only prefixes, hence check if the given key fully matches the
-	// key that is stored in the primary storage before returning the actual value.
-	if bytes.Compare(key, primaryKey) != 0 {
-		return nil, false, nil
-	}
+	/*
+		// The index stores only prefixes, hence check if the given key fully matches the
+		// key that is stored in the primary storage before returning the actual value.
+		if bytes.Compare(key, primaryKey) != 0 {
+			return nil, false, nil
+		}*/
 	return value, true, nil
 }
 
@@ -251,20 +250,25 @@ func (s *Store) Has(key []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	blk, found, err := s.index.Get(indexKey)
-	if !found {
-		return false, nil
-	}
-
-	// The index stores only prefixes, hence check if the given key fully matches the
-	// key that is stored in the primary storage before returning the actual value.
-	// TODO: avoid second lookup
-	primaryIndexKey, err := s.index.Primary.GetIndexKey(blk)
+	_, found, err := s.index.Get(indexKey)
 	if err != nil {
 		return false, err
 	}
+	return found, nil
+	/*
+		if !found {
+			return false, nil
+		}
 
-	return bytes.Compare(indexKey, primaryIndexKey) == 0, nil
+		// The index stores only prefixes, hence check if the given key fully matches the
+		// key that is stored in the primary storage before returning the actual value.
+		// TODO: avoid second lookup
+		primaryIndexKey, err := s.index.Primary.GetIndexKey(blk)
+		if err != nil {
+			return false, err
+		}
+
+		return bytes.Compare(indexKey, primaryIndexKey) == 0, nil*/
 }
 
 func (s *Store) GetSize(key []byte) (Size, bool, error) {
@@ -279,17 +283,17 @@ func (s *Store) GetSize(key []byte) (Size, bool, error) {
 	if !found {
 		return 0, false, nil
 	}
+	/*
+		// The index stores only prefixes, hence check if the given key fully matches the
+		// key that is stored in the primary storage before returning the actual value.
+		// TODO: avoid second lookup
+		primaryIndexKey, err := s.index.Primary.GetIndexKey(blk)
+		if err != nil {
+			return 0, false, err
+		}
 
-	// The index stores only prefixes, hence check if the given key fully matches the
-	// key that is stored in the primary storage before returning the actual value.
-	// TODO: avoid second lookup
-	primaryIndexKey, err := s.index.Primary.GetIndexKey(blk)
-	if err != nil {
-		return 0, false, err
-	}
-
-	if bytes.Compare(indexKey, primaryIndexKey) != 0 {
-		return 0, false, nil
-	}
+		if bytes.Compare(indexKey, primaryIndexKey) != 0 {
+			return 0, false, nil
+		}*/
 	return blk.Size - Size(len(key)), true, nil
 }
