@@ -8,6 +8,13 @@ type Block struct {
 	Size   Size
 }
 
+type KeyedBlock struct {
+	Block
+	KeySize KeySize
+}
+
+type KeySize uint8
+
 type Size uint32
 
 type Work uint64

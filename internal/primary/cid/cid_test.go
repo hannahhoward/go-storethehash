@@ -87,7 +87,7 @@ func TestIndexGet(t *testing.T) {
 
 	// load blocks
 	blks := testutil.GenerateBlocksOfSize(5, 100)
-	var locs []store.Block
+	var locs []store.KeyedBlock
 	for _, blk := range blks {
 		loc, err := primaryStorage.Put(blk.Cid().Bytes(), blk.RawData())
 		require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestIndexGet(t *testing.T) {
 	// should fetch from memory before flush
 	for i, loc := range locs {
 		expectedBlk := blks[i]
-		key, value, err := primaryStorage.Get(loc)
+		key, value, err := primaryStorage.Get(loc.Block)
 		require.NoError(t, err)
 		_, c, err := cid.CidFromBytes(key)
 		require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestIndexGet(t *testing.T) {
 
 	for i, loc := range locs {
 		expectedBlk := blks[i]
-		key, value, err := primaryStorage.Get(loc)
+		key, value, err := primaryStorage.Get(loc.Block)
 		require.NoError(t, err)
 		_, c, err := cid.CidFromBytes(key)
 		require.NoError(t, err)

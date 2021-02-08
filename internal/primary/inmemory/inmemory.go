@@ -26,10 +26,10 @@ func (im *InMemory) Get(blk store.Block) (key []byte, value []byte, err error) {
 	return val[0], val[1], nil
 }
 
-func (im *InMemory) Put(key []byte, value []byte) (blk store.Block, err error) {
+func (im *InMemory) Put(key []byte, value []byte) (blk store.KeyedBlock, err error) {
 	pos := len(*im)
 	*im = append(*im, [2][]byte{key, value})
-	return store.Block{Offset: store.Position(pos), Size: 1}, nil
+	return store.KeyedBlock{Block: store.Block{Offset: store.Position(pos), Size: 1}, KeySize: 1}, nil
 }
 
 func (im *InMemory) Flush() (store.Work, error) {
@@ -52,8 +52,8 @@ func (im *InMemory) IndexKey(key []byte) ([]byte, error) {
 	return key, nil
 }
 
-func (im *InMemory) GetIndexKey(blk store.Block) ([]byte, error) {
-	key, _, err := im.Get(blk)
+func (im *InMemory) GetIndexKey(blk store.KeyedBlock) ([]byte, error) {
+	key, _, err := im.Get(blk.Block)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ const KeySizeBytes int = 1
 type KeyPositionPair struct {
 	Key []byte
 	// The file offset where the full key and its value is actually stored.
-	Block Block
+	Block KeyedBlock
 }
 
 // Record is a KeyPositionPair plus the actual position of the record in the record list
@@ -88,7 +88,7 @@ func (rl RecordList) PutKeys(keys []KeyPositionPair, start int, end int) []byte 
 			// Each key might have a different size, so just allocate an arbitrary size to
 			// prevent more allocations. I picked 32 bytes as I don't expect hashes (hence
 			// keys) to be bigger that that
-			(int(len(keys))*(KeySizeBytes+FileOffsetBytes+FileSizeBytes+32)))
+			(int(len(keys))*(KeySizeBytes+FileOffsetBytes+FileSizeBytes+KeySizeBytes+32)))
 	newKeys = append(newKeys, rl[:start]...)
 	for _, key := range keys {
 		newKeys = AddKeyPosition(newKeys, key)
@@ -101,11 +101,11 @@ func (rl RecordList) PutKeys(keys []KeyPositionPair, start int, end int) []byte 
 // As the index is only storing prefixes and not the actual keys, the returned offset might
 // match, it's not guaranteed. Once the key is retieved from the primary storage it needs to
 // be checked if it actually matches.
-func (rl RecordList) Get(key []byte) (Block, bool) {
+func (rl RecordList) Get(key []byte) (KeyedBlock, bool) {
 	// Several prefixes can match a `key`, we are only interested in the last one that
 	// matches, hence keep a match around until we can be sure it's the last one.
 	rli := &RecordListIter{rl, 0}
-	var blk Block
+	var blk KeyedBlock
 	var matched bool
 	for !rli.Done() {
 		record := rli.Next()
@@ -127,13 +127,16 @@ func (rl RecordList) Get(key []byte) (Block, bool) {
 //
 // The given position must point to the first byte where the record starts.
 func (rl RecordList) ReadRecord(pos int) Record {
-	sizeOffset := pos + FileOffsetBytes + FileSizeBytes
+	sizeOffset := pos + FileOffsetBytes + FileSizeBytes + KeySizeBytes
 	size := rl[int(sizeOffset)]
 	return Record{
 		pos,
-		KeyPositionPair{rl[sizeOffset+KeySizeBytes : sizeOffset+KeySizeBytes+int(size)], Block{
-			Position(binary.LittleEndian.Uint64(rl[pos:])),
-			Size(binary.LittleEndian.Uint32(rl[pos+FileOffsetBytes:])),
+		KeyPositionPair{rl[sizeOffset+KeySizeBytes : sizeOffset+KeySizeBytes+int(size)], KeyedBlock{
+			Block: Block{
+				Position(binary.LittleEndian.Uint64(rl[pos:])),
+				Size(binary.LittleEndian.Uint32(rl[pos+FileOffsetBytes:])),
+			},
+			KeySize: KeySize(rl[pos+FileOffsetBytes+FileSizeBytes]),
 		}},
 	}
 }
@@ -170,7 +173,7 @@ func (rli *RecordListIter) Done() bool {
 func (rli *RecordListIter) Next() Record {
 	record := rli.records.ReadRecord(rli.pos)
 	// Prepare the internal state for the next call
-	rli.pos += FileOffsetBytes + FileSizeBytes + KeySizeBytes + len(record.Key)
+	rli.pos += FileOffsetBytes + FileSizeBytes + (2 * KeySizeBytes) + len(record.Key)
 	return record
 }
 
@@ -183,12 +186,23 @@ func (rli *RecordListIter) Next() Record {
 //     | Pointer to actual data | Size of the key |            Key            |
 // ```
 func AddKeyPosition(data []byte, keyPos KeyPositionPair) []byte {
-	size := byte(len(keyPos.Key))
+	keyrle := byte(len(keyPos.Key))
 	offsetBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(offsetBytes, uint64(keyPos.Block.Offset))
 	sizeBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(sizeBytes, uint32(keyPos.Block.Size))
-	return append(append(append(append(data, offsetBytes...), sizeBytes...), size), keyPos.Key...)
+	return append(
+		append(
+			append(
+				append(
+					append(data, offsetBytes...),
+					sizeBytes...,
+				),
+				byte(keyPos.Block.KeySize),
+			),
+			keyrle,
+		),
+		keyPos.Key...)
 }
 
 // EncodeKeyPosition a key and and offset into a single record

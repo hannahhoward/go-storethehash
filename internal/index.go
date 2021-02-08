@@ -197,7 +197,7 @@ func scanIndex(path string, indexSizeBits uint8) (Buckets, SizeBuckets, error) {
 // Put a key together with a file offset into the index.
 //
 // The key needs to be a cryptographically secure hash and at least 4 bytes long.
-func (i *Index) Put(key []byte, location Block) error {
+func (i *Index) Put(key []byte, location KeyedBlock) error {
 	if len(key) < 4 {
 		return ErrKeyTooShort
 	}
@@ -423,9 +423,9 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position, record
 }
 
 // Get the file offset in the primary storage of a key.
-func (i *Index) Get(key []byte) (Block, bool, error) {
+func (i *Index) Get(key []byte) (KeyedBlock, bool, error) {
 	if len(key) < 4 {
-		return Block{}, false, ErrKeyTooShort
+		return KeyedBlock{}, false, ErrKeyTooShort
 	}
 	// Determine which bucket a key falls into. Use the first few bytes of they key for it and
 	// interpret them as a little-endian integer.
@@ -437,7 +437,7 @@ func (i *Index) Get(key []byte) (Block, bool, error) {
 	cached, indexOffset, recordListSize, err := i.readBucketInfo(bucket)
 	i.bucketLk.RUnlock()
 	if err != nil {
-		return Block{}, false, err
+		return KeyedBlock{}, false, err
 	}
 	var records RecordList
 	if cached != nil {
@@ -445,11 +445,11 @@ func (i *Index) Get(key []byte) (Block, bool, error) {
 	} else {
 		records, err = i.readDiskBuckets(bucket, indexOffset, recordListSize)
 		if err != nil {
-			return Block{}, false, err
+			return KeyedBlock{}, false, err
 		}
 	}
 	if records == nil {
-		return Block{}, false, nil
+		return KeyedBlock{}, false, nil
 	}
 
 	// The key doesn't need the prefix that was used to find the right bucket. For simplicty

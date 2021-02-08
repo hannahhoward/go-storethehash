@@ -6,7 +6,7 @@ type PrimaryStorage interface {
 	Get(blk Block) (key []byte, value []byte, err error)
 
 	// Saves a key-value pair and returns the position it was stored at.
-	Put(key []byte, value []byte) (blk Block, err error)
+	Put(key []byte, value []byte) (blk KeyedBlock, err error)
 
 	//  Creates a key that can be used for the index.
 	//
@@ -20,7 +20,7 @@ type PrimaryStorage interface {
 	// Returns the key that is used for the index which is stored at the given position.
 	//
 	// Note that this key might differ from the key that is actually stored.
-	GetIndexKey(blk Block) ([]byte, error)
+	GetIndexKey(blk KeyedBlock) ([]byte, error)
 
 	Flush() (Work, error)
 	Sync() error

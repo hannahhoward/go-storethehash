@@ -129,7 +129,7 @@ func (s *Store) Get(key []byte) ([]byte, bool, error) {
 	if !found {
 		return nil, false, nil
 	}
-	primaryKey, value, err := s.index.Primary.Get(fileOffset)
+	primaryKey, value, err := s.index.Primary.Get(fileOffset.Block)
 	if err != nil {
 		return nil, false, err
 	}
