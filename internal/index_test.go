@@ -80,7 +80,7 @@ func assertCommonPrefixTrimmed(t *testing.T, key1 []byte, key2 []byte, expectedK
 			record := recordIter.Next()
 			keyLengths = append(keyLengths, len(record.Key))
 		}
-		require.Equal(t, keyLengths, []int{1}, "Single key has the expected length of 1")
+		require.Equal(t, keyLengths, []int{store.IndexBaseline}, "Single key has the expected length of 1")
 	}
 
 	// The second block contains both keys
@@ -136,7 +136,7 @@ func TestIndexPutSingleKey(t *testing.T) {
 	record := recordIter.Next()
 	require.Equal(t,
 		len(record.Key),
-		1,
+		store.IndexBaseline,
 		"Key is trimmed to one byteas it's the only key in the record list",
 	)
 }
@@ -151,9 +151,9 @@ func TestIndexPutDistinctKey(t *testing.T) {
 	indexPath := filepath.Join(tempDir, "storethehash.index")
 	index, err := store.OpenIndex(indexPath, primaryStorage, bucketBits)
 	require.NoError(t, err)
-	err = index.Put([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, store.KeyedBlock{Block: store.Block{Offset: 222, Size: 10}, KeySize: 1})
+	err = index.Put([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9}, store.KeyedBlock{Block: store.Block{Offset: 222, Size: 10}, KeySize: 1})
 	require.NoError(t, err)
-	err = index.Put([]byte{1, 2, 3, 55, 5, 6, 7, 8, 9, 10}, store.KeyedBlock{Block: store.Block{Offset: 333, Size: 10}, KeySize: 1})
+	err = index.Put([]byte{1, 2, 3, 55, 5, 6, 7, 8, 9}, store.KeyedBlock{Block: store.Block{Offset: 333, Size: 10}, KeySize: 1})
 	require.NoError(t, err)
 	_, err = index.Flush()
 	require.NoError(t, err)
@@ -184,32 +184,32 @@ func TestIndexPutDistinctKey(t *testing.T) {
 		record := recordIter.Next()
 		keys = append(keys, record.Key)
 	}
-	require.Equal(t, keys, [][]byte{{4}, {55}}, "All keys are trimmed to a single byte")
+	require.Equal(t, keys, [][]byte{{4, 5, 6, 7}, {55, 5, 6, 7}}, "All keys are trimmed to a single byte")
 }
 
 // This test is about making sure that a key is trimmed correctly if it shares a prefix with the
 // previous key
 
 func TestIndexPutPrevKeyCommonPrefix(t *testing.T) {
-	key1 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	key2 := []byte{1, 2, 3, 4, 5, 6, 9, 9, 9, 9}
-	assertCommonPrefixTrimmed(t, key1, key2, 4)
+	key1 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	key2 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10}
+	assertCommonPrefixTrimmed(t, key1, key2, 8)
 }
 
 // This test is about making sure that a key is trimmed correctly if it shares a prefix with the
 // next key
 func TestIndexPutNextKeyCommonPrefix(t *testing.T) {
-	key1 := []byte{1, 2, 3, 4, 5, 6, 9, 9, 9, 9}
-	key2 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	assertCommonPrefixTrimmed(t, key1, key2, 4)
+	key1 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10}
+	key2 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	assertCommonPrefixTrimmed(t, key1, key2, 8)
 }
 
 // This test is about making sure that a key is trimmed correctly if it shares a prefix with the
 // previous and the next key, where the common prefix with the next key is longer.
 func TestIndexPutPrevAndNextKeyCommonPrefix(t *testing.T) {
-	key1 := []byte{1, 2, 3, 4, 5, 6, 9, 9, 9, 9}
-	key2 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	key3 := []byte{1, 2, 3, 4, 5, 6, 9, 8, 8, 8}
+	key1 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 10, 10}
+	key2 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	key3 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 9, 9}
 
 	const bucketBits uint8 = 24
 	primaryStorage := inmemory.NewInmemory([][2][]byte{
@@ -258,7 +258,7 @@ func TestIndexPutPrevAndNextKeyCommonPrefix(t *testing.T) {
 	}
 	require.Equal(t,
 		keys,
-		[][]byte{{4, 5, 6, 7}, {4, 5, 6, 9, 8}, {4, 5, 6, 9, 9}},
+		[][]byte{{4, 5, 6, 7, 8, 9, 10}, {4, 5, 6, 7, 8, 9, 11, 9}, {4, 5, 6, 7, 8, 9, 11, 10}},
 		"Keys are correctly sorted and trimmed",
 	)
 }
