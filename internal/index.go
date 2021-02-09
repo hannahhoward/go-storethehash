@@ -74,6 +74,8 @@ type Index struct {
 	bucketLk          sync.RWMutex
 	outstandingWork   Work
 	curPool, nextPool bucketPool
+	bucketCacheLk     sync.RWMutex
+	bucketCache       bucketCache
 	length            Position
 }
 
@@ -82,6 +84,19 @@ const indexBufferSize = 32 * 4096
 type bucketPool map[BucketIndex][]byte
 
 const BucketPoolSize = 1024
+
+const BucketCacheSize = 128
+
+type cacheRecord struct {
+	idx  BucketIndex
+	data []byte
+}
+
+type bucketCache struct {
+	buckets map[BucketIndex]int
+	next    int
+	data    []cacheRecord
+}
 
 // Open and index.
 //
@@ -144,6 +159,12 @@ func OpenIndex(path string, primary PrimaryStorage, indexSizeBits uint8) (*Index
 		0,
 		make(bucketPool, BucketPoolSize),
 		make(bucketPool, BucketPoolSize),
+		sync.RWMutex{},
+		bucketCache{
+			buckets: make(map[BucketIndex]int, BucketCacheSize),
+			next:    0,
+			data:    make([]cacheRecord, BucketCacheSize),
+		},
 		length,
 	}, nil
 }
@@ -371,6 +392,11 @@ func (i *Index) commit() (Work, error) {
 		blks = append(blks, bucketBlock{bucket, blk})
 		work += newWork
 	}
+	i.bucketCacheLk.Lock()
+	i.bucketCache.buckets = make(map[BucketIndex]int, BucketCacheSize)
+	i.bucketCache.next = 0
+	i.bucketCacheLk.Unlock()
+
 	i.bucketLk.Lock()
 	defer i.bucketLk.Unlock()
 	for _, blk := range blks {
@@ -412,6 +438,12 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position, record
 	if indexOffset == 0 {
 		return nil, nil
 	}
+	i.bucketCacheLk.RLock()
+	idx, ok := i.bucketCache.buckets[bucket]
+	i.bucketCacheLk.RUnlock()
+	if ok {
+		return NewRecordList(i.bucketCache.data[idx].data), nil
+	}
 	// Read the record list from disk and get the file offset of that key in the primary
 	// storage.
 	data := make([]byte, recordListSize)
@@ -419,6 +451,22 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position, record
 	if err != nil {
 		return nil, err
 	}
+	i.bucketCacheLk.Lock()
+	idx, ok = i.bucketCache.buckets[bucket]
+	if !ok {
+		toDelete := i.bucketCache.data[i.bucketCache.next].idx
+		_, ok := i.bucketCache.buckets[toDelete]
+		if ok {
+			delete(i.bucketCache.buckets, toDelete)
+		}
+		i.bucketCache.buckets[bucket] = i.bucketCache.next
+		i.bucketCache.data[i.bucketCache.next] = cacheRecord{idx: bucket, data: data}
+		i.bucketCache.next++
+		if i.bucketCache.next >= BucketCacheSize {
+			i.bucketCache.next = 0
+		}
+	}
+	i.bucketCacheLk.Unlock()
 	return NewRecordList(data), nil
 }
 
