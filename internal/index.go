@@ -67,8 +67,8 @@ func FromBytes(bytes []byte) Header {
 type Index struct {
 	sizeBits          uint8
 	buckets           Buckets
-	file              *os.File
-	writer            *bufio.Writer
+	file              *MMap
+	writer            *MMap
 	Primary           PrimaryStorage
 	bucketLk          sync.RWMutex
 	outstandingWork   Work
@@ -127,11 +127,15 @@ func OpenIndex(path string, primary PrimaryStorage, indexSizeBits uint8) (*Index
 		}
 		length = Position(stat.Size())
 	}
+	memoryMapped, err := NewMMap(file)
+	if err != nil {
+		return nil, err
+	}
 	return &Index{
 		indexSizeBits,
 		buckets,
-		file,
-		bufio.NewWriterSize(file, indexBufferSize),
+		memoryMapped,
+		memoryMapped,
 		primary,
 		sync.RWMutex{},
 		0,
@@ -396,14 +400,12 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position) (Recor
 
 	// Read the record list from disk and get the file offset of that key in the primary
 	// storage.
-	sizeBuffer := make([]byte, SizePrefixSize)
-	_, err := i.file.ReadAt(sizeBuffer, int64(indexOffset))
+	sizeBuffer, err := i.file.At(int64(SizePrefixSize), int64(indexOffset))
 	if err != nil {
 		return nil, err
 	}
 	recordListSize := binary.LittleEndian.Uint32(sizeBuffer)
-	data := make([]byte, recordListSize)
-	_, err = i.file.ReadAt(data, int64(indexOffset+Position(SizePrefixSize)))
+	data, err := i.file.At(int64(recordListSize), int64(indexOffset)+int64(SizePrefixSize))
 	if err != nil {
 		return nil, err
 	}

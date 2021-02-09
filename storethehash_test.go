@@ -59,6 +59,22 @@ func TestParallelism(t *testing.T) {
 		t.Logf("Found %s", blk.Cid())
 	}
 
+	// start/stop
+	bs.Close()
+	bs, err = storethehash.OpenHashedBlockstore(indexPath, dataPath)
+	require.NoError(t, err)
+	bs.Start()
+
+	t.Logf("Finding random blks")
+	for i := 0; i < len(blks)/25; i++ {
+		expectedBlk := blks[rand.Intn(len(blks))]
+		blk, err := bs.Get(expectedBlk.Cid())
+		require.NoError(t, err)
+		require.True(t, expectedBlk.Cid().Equals(blk.Cid()))
+		require.Equal(t, expectedBlk.RawData(), blk.RawData())
+		t.Logf("Found %s", blk.Cid())
+	}
+
 	t.Logf("Running some concurrent inserts and fetches")
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
