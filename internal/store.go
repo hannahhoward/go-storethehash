@@ -5,7 +5,11 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	logging "github.com/ipfs/go-log/v2"
 )
+
+var log = logging.Logger("storethehash")
 
 const DefaultBurstRate = 4 * 1024 * 1024
 
@@ -127,6 +131,7 @@ func (s *Store) Get(key []byte) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	if !found {
+		log.Infof("Unable to find block in index")
 		return nil, false, nil
 	}
 	primaryKey, value, err := s.index.Primary.Get(fileOffset)
@@ -137,6 +142,7 @@ func (s *Store) Get(key []byte) ([]byte, bool, error) {
 	// The index stores only prefixes, hence check if the given key fully matches the
 	// key that is stored in the primary storage before returning the actual value.
 	if bytes.Compare(key, primaryKey) != 0 {
+		log.Infof("Keys do not match")
 		return nil, false, nil
 	}
 	return value, true, nil

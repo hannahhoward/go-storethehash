@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -123,6 +124,8 @@ func TestIndexPutSingleKey(t *testing.T) {
 
 	// Skip header
 	file, err := os.Open(indexPath)
+	stat, _ := file.Stat()
+	fmt.Println(stat.Size())
 	require.NoError(t, err)
 	_, bytesRead, err := store.ReadHeader(file)
 	require.NoError(t, err)

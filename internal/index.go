@@ -68,8 +68,8 @@ type Index struct {
 	sizeBits          uint8
 	buckets           Buckets
 	sizeBuckets       SizeBuckets
-	file              *os.File
-	writer            *bufio.Writer
+	file              *MMap
+	writer            *MMap
 	Primary           PrimaryStorage
 	bucketLk          sync.RWMutex
 	outstandingWork   Work
@@ -133,12 +133,16 @@ func OpenIndex(path string, primary PrimaryStorage, indexSizeBits uint8) (*Index
 		}
 		length = Position(stat.Size())
 	}
+	memoryMapped, err := NewMMap(file)
+	if err != nil {
+		return nil, err
+	}
 	return &Index{
 		indexSizeBits,
 		buckets,
 		sizeBuckets,
-		file,
-		bufio.NewWriterSize(file, indexBufferSize),
+		memoryMapped,
+		memoryMapped,
 		primary,
 		sync.RWMutex{},
 		0,
@@ -415,8 +419,7 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position, record
 	}
 	// Read the record list from disk and get the file offset of that key in the primary
 	// storage.
-	data := make([]byte, recordListSize)
-	_, err := i.file.ReadAt(data, int64(indexOffset))
+	data, err := i.file.At(int64(recordListSize), int64(indexOffset))
 	if err != nil {
 		return nil, err
 	}
