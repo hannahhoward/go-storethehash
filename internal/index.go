@@ -450,6 +450,7 @@ func (i *Index) readDiskBuckets(bucket BucketIndex, indexOffset Position, record
 	idx, ok := i.bucketCache.buckets[bucket]
 	i.bucketCacheLk.RUnlock()
 	if ok {
+		fmt.Println("read from cache!")
 		return NewRecordList(i.bucketCache.data[idx].data), nil
 	}
 	// Read the record list from disk and get the file offset of that key in the primary
