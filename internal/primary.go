@@ -3,10 +3,10 @@ package store
 // PrimaryStorage is an interface for storing and retrieving key value pairs on disk
 type PrimaryStorage interface {
 	// Returns the key-value pair from the given position.
-	Get(blk Block) (key []byte, value []byte, err error)
+	Get(blk Position) (key []byte, value []byte, err error)
 
 	// Saves a key-value pair and returns the position it was stored at.
-	Put(key []byte, value []byte) (blk Block, err error)
+	Put(key []byte, value []byte) (blk Position, err error)
 
 	//  Creates a key that can be used for the index.
 	//
@@ -20,7 +20,7 @@ type PrimaryStorage interface {
 	// Returns the key that is used for the index which is stored at the given position.
 	//
 	// Note that this key might differ from the key that is actually stored.
-	GetIndexKey(blk Block) ([]byte, error)
+	GetIndexKey(blk Position) ([]byte, error)
 
 	Flush() (Work, error)
 	Sync() error

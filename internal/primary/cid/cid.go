@@ -34,13 +34,13 @@ type blockRecord struct {
 	value []byte
 }
 type blockPool struct {
-	refs   map[store.Block]int
+	refs   map[store.Position]int
 	blocks []blockRecord
 }
 
 func newBlockPool() blockPool {
 	return blockPool{
-		refs:   make(map[store.Block]int, blockPoolSize),
+		refs:   make(map[store.Position]int, blockPoolSize),
 		blocks: make([]blockRecord, 0, blockPoolSize),
 	}
 }
@@ -63,36 +63,42 @@ func OpenCIDPrimary(path string) (*CIDPrimary, error) {
 	}, nil
 }
 
-func (cp *CIDPrimary) getCached(blk store.Block) ([]byte, []byte, error) {
+func (cp *CIDPrimary) getCached(pos store.Position) ([]byte, []byte, error) {
 	cp.poolLk.RLock()
 	defer cp.poolLk.RUnlock()
-	idx, ok := cp.nextPool.refs[blk]
+	idx, ok := cp.nextPool.refs[pos]
 	if ok {
 		br := cp.nextPool.blocks[idx]
 		return br.key, br.value, nil
 	}
-	idx, ok = cp.curPool.refs[blk]
+	idx, ok = cp.curPool.refs[pos]
 	if ok {
 		br := cp.curPool.blocks[idx]
 		return br.key, br.value, nil
 	}
-	if blk.Offset >= cp.length {
+	if pos >= cp.length {
 		return nil, nil, store.ErrOutOfBounds
 	}
 	return nil, nil, nil
 }
 
-func (cp *CIDPrimary) Get(blk store.Block) (key []byte, value []byte, err error) {
-	key, value, err = cp.getCached(blk)
+func (cp *CIDPrimary) Get(pos store.Position) (key []byte, value []byte, err error) {
+	key, value, err = cp.getCached(pos)
 	if err != nil {
 		return
 	}
 	if key != nil && value != nil {
 		return
 	}
-	read := make([]byte, CIDSizePrefix+int(blk.Size))
-	cp.file.ReadAt(read, int64(blk.Offset))
-	c, value, err := readNode(read[4:])
+	cidBuffer := make([]byte, CIDSizePrefix)
+	_, err = cp.file.ReadAt(cidBuffer, int64(pos))
+	if err != nil {
+		return nil, nil, err
+	}
+	blkSize := binary.LittleEndian.Uint32(cidBuffer)
+	read := make([]byte, int(blkSize))
+	cp.file.ReadAt(read, int64(pos)+CIDSizePrefix)
+	c, value, err := readNode(read)
 	return c.Bytes(), value, err
 }
 
@@ -105,17 +111,16 @@ func readNode(data []byte) (cid.Cid, []byte, error) {
 	return c, data[n:], nil
 }
 
-func (cp *CIDPrimary) Put(key []byte, value []byte) (store.Block, error) {
+func (cp *CIDPrimary) Put(key []byte, value []byte) (store.Position, error) {
 	cp.poolLk.Lock()
 	defer cp.poolLk.Unlock()
 	length := cp.length
 	size := len(key) + len(value)
 	cp.length += CIDSizePrefix + store.Position(size)
-	blk := store.Block{Offset: length, Size: store.Size(size)}
-	cp.nextPool.refs[blk] = len(cp.nextPool.blocks)
+	cp.nextPool.refs[length] = len(cp.nextPool.blocks)
 	cp.nextPool.blocks = append(cp.nextPool.blocks, blockRecord{key, value})
 	cp.outstandingWork += store.Work(size + CIDSizePrefix)
-	return blk, nil
+	return length, nil
 }
 
 func (cp *CIDPrimary) flushBlock(key []byte, value []byte) (store.Work, error) {
@@ -147,7 +152,7 @@ func (cp *CIDPrimary) IndexKey(key []byte) ([]byte, error) {
 	return decoded.Digest, nil
 }
 
-func (cp *CIDPrimary) GetIndexKey(blk store.Block) ([]byte, error) {
+func (cp *CIDPrimary) GetIndexKey(blk store.Position) ([]byte, error) {
 	key, _, err := cp.Get(blk)
 	if err != nil {
 		return nil, err

@@ -17,19 +17,19 @@ func NewInmemory(data [][2][]byte) *InMemory {
 	return &value
 }
 
-func (im *InMemory) Get(blk store.Block) (key []byte, value []byte, err error) {
+func (im *InMemory) Get(pos store.Position) (key []byte, value []byte, err error) {
 	max := len(*im)
-	if blk.Offset >= store.Position(max) {
+	if pos >= store.Position(max) {
 		return nil, nil, store.ErrOutOfBounds
 	}
-	val := (*im)[blk.Offset]
+	val := (*im)[pos]
 	return val[0], val[1], nil
 }
 
-func (im *InMemory) Put(key []byte, value []byte) (blk store.Block, err error) {
+func (im *InMemory) Put(key []byte, value []byte) (blk store.Position, err error) {
 	pos := len(*im)
 	*im = append(*im, [2][]byte{key, value})
-	return store.Block{Offset: store.Position(pos), Size: 1}, nil
+	return store.Position(pos), nil
 }
 
 func (im *InMemory) Flush() (store.Work, error) {
@@ -52,7 +52,7 @@ func (im *InMemory) IndexKey(key []byte) ([]byte, error) {
 	return key, nil
 }
 
-func (im *InMemory) GetIndexKey(blk store.Block) ([]byte, error) {
+func (im *InMemory) GetIndexKey(blk store.Position) ([]byte, error) {
 	key, _, err := im.Get(blk)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ type inMemoryIter struct {
 }
 
 func (imi *inMemoryIter) Next() ([]byte, []byte, error) {
-	key, value, err := imi.im.Get(store.Block{Offset: store.Position(imi.idx)})
+	key, value, err := imi.im.Get(store.Position(imi.idx))
 	if err == store.ErrOutOfBounds {
 		return nil, nil, io.EOF
 	}

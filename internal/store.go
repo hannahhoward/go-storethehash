@@ -272,7 +272,7 @@ func (s *Store) GetSize(key []byte) (Size, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
-	blk, found, err := s.index.Get(indexKey)
+	pos, found, err := s.index.Get(indexKey)
 	if err != nil {
 		return 0, false, err
 	}
@@ -283,13 +283,13 @@ func (s *Store) GetSize(key []byte) (Size, bool, error) {
 	// The index stores only prefixes, hence check if the given key fully matches the
 	// key that is stored in the primary storage before returning the actual value.
 	// TODO: avoid second lookup
-	primaryIndexKey, err := s.index.Primary.GetIndexKey(blk)
+	primaryKey, value, err := s.index.Primary.Get(pos)
 	if err != nil {
 		return 0, false, err
 	}
 
-	if bytes.Compare(indexKey, primaryIndexKey) != 0 {
+	if bytes.Compare(key, primaryKey) != 0 {
 		return 0, false, nil
 	}
-	return blk.Size - Size(len(key)), true, nil
+	return Size(len(value)), true, nil
 }

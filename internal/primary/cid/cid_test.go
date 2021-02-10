@@ -31,8 +31,7 @@ func TestIndexPut(t *testing.T) {
 		expectedSize := len(blk.Cid().Bytes()) + len(blk.RawData())
 		loc, err := primaryStorage.Put(blk.Cid().Bytes(), blk.RawData())
 		require.NoError(t, err)
-		require.Equal(t, expectedOffset, loc.Offset)
-		require.Equal(t, store.Size(expectedSize), loc.Size)
+		require.Equal(t, expectedOffset, loc)
 		expectedOffset += cidprimary.CIDSizePrefix + store.Position(expectedSize)
 	}
 
@@ -69,10 +68,7 @@ func TestIndexGetEmptyIndex(t *testing.T) {
 	primaryStorage, err := cidprimary.OpenCIDPrimary(primaryPath)
 	require.NoError(t, err)
 
-	key, value, err := primaryStorage.Get(store.Block{
-		Offset: 0,
-		Size:   50,
-	})
+	key, value, err := primaryStorage.Get(store.Position(0))
 	require.Nil(t, key)
 	require.Nil(t, value)
 	require.Error(t, err)
@@ -87,7 +83,7 @@ func TestIndexGet(t *testing.T) {
 
 	// load blocks
 	blks := testutil.GenerateBlocksOfSize(5, 100)
-	var locs []store.Block
+	var locs []store.Position
 	for _, blk := range blks {
 		loc, err := primaryStorage.Put(blk.Cid().Bytes(), blk.RawData())
 		require.NoError(t, err)
